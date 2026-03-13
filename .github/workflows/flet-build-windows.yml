@@ -48,7 +48,7 @@ jobs:
         run: pipenv run python -m pip install "flet[cli]==$env:FLET_VERSION"
 
       - name: Build app with Flet
-        run: pipenv run flet build windows app.py
+        run: pipenv run flet build windows --module-name app
 
       - name: Package artifact
         run: Compress-Archive -Path "build\\windows\\*" -DestinationPath "build\\$env:ARCHIVE_NAME" -Force

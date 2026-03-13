@@ -32,6 +32,11 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
 
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev mesa-utils
+
       - name: Enable Linux desktop
         run: flutter config --enable-linux-desktop
 
@@ -45,7 +50,7 @@ jobs:
         run: pipenv run python -m pip install "flet[cli]==${FLET_VERSION}"
 
       - name: Build app with Flet
-        run: pipenv run flet build linux app.py
+        run: pipenv run flet build linux --module-name app
 
       - name: Package artifact
         run: tar -czf "build/${ARCHIVE_NAME}" -C build linux
