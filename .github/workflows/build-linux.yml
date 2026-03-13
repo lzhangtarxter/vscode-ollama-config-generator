@@ -18,10 +18,10 @@ jobs:
       ARCHIVE_NAME: ContinueConfigGenerator-linux-x64.tar.gz
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -38,7 +38,7 @@ jobs:
         run: tar -czf "dist/$ARCHIVE_NAME" -C dist "$APP_NAME"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: linux-x64
           path: dist/${{ env.ARCHIVE_NAME }}
