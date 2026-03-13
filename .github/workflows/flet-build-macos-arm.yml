@@ -1,0 +1,54 @@
+name: Flet Build macOS ARM
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    env:
+      PYTHON_VERSION: "3.14"
+      FLET_VERSION: "0.82.2"
+      ARCHIVE_NAME: ContinueConfigGenerator-flet-macos-arm.zip
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pipenv
+        run: python -m pip install --upgrade pip pipenv
+
+      - name: Install dependencies
+        run: pipenv sync --dev
+
+      - name: Install Flet CLI
+        run: pipenv run python -m pip install "flet[cli]==${FLET_VERSION}"
+
+      - name: Build app with Flet
+        run: pipenv run flet build macos app.py
+
+      - name: Package artifact
+        run: ditto -c -k --sequesterRsrc --keepParent build/macos "build/${ARCHIVE_NAME}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flet-macos-arm
+          path: build/${{ env.ARCHIVE_NAME }}
+
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/${{ env.ARCHIVE_NAME }}
+
