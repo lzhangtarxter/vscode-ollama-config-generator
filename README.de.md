@@ -24,6 +24,8 @@ Erwartete Download-Dateien sind:
 - `ContinueConfigGenerator-flet-windows-x64.zip`
 - `ContinueConfigGenerator-flet-linux-x64.tar.gz`
 
+Die paketierte macOS-App verwendet zuerst `PATH` und prueft danach gaengige Installationspfade wie `/opt/homebrew/bin/ollama` auf Apple-Silicon-Macs.
+
 ## Screenshots
 
 ![Hauptansicht Screenshot 1](assets/screenshot-main-1.de.png)

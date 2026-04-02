@@ -21,6 +21,11 @@ STATUS_PENDING = "pending"
 STATUS_INSPECTING = "inspecting"
 STATUS_READY = "ready"
 STATUS_ERROR = "error"
+OLLAMA_FALLBACK_PATHS = (
+    "/opt/homebrew/bin/ollama",
+    "/usr/local/bin/ollama",
+    "/usr/bin/ollama",
+)
 
 TRANSLATIONS = {
     "en": {
@@ -99,7 +104,7 @@ TRANSLATIONS = {
         "status_write_failed": "Failed to write config: {error}",
         "status_written_with_backup": "Wrote config to {path} and created backup {backup}",
         "status_written": "Wrote config to {path}",
-        "ollama_not_found": "Could not find `ollama` in PATH.",
+        "ollama_not_found": "Could not find `ollama`. Check PATH or install location, for example `/opt/homebrew/bin/ollama` on Apple Silicon Macs.",
         "ollama_failed": "Failed to run `ollama {args}`: {error}",
         "ollama_timeout": "`ollama {args}` timed out after {timeout} seconds.",
         "ollama_command_failed": "`ollama {args}` failed: {error}",
@@ -182,7 +187,7 @@ TRANSLATIONS = {
         "status_write_failed": "Konfiguration konnte nicht geschrieben werden: {error}",
         "status_written_with_backup": "Konfiguration nach {path} geschrieben und Backup {backup} erstellt",
         "status_written": "Konfiguration nach {path} geschrieben",
-        "ollama_not_found": "`ollama` wurde im PATH nicht gefunden.",
+        "ollama_not_found": "`ollama` wurde nicht gefunden. Pruefe PATH oder den Installationspfad, zum Beispiel `/opt/homebrew/bin/ollama` auf Apple-Silicon-Macs.",
         "ollama_failed": "`ollama {args}` konnte nicht ausgeführt werden: {error}",
         "ollama_timeout": "`ollama {args}` hat nach {timeout} Sekunden das Zeitlimit erreicht.",
         "ollama_command_failed": "`ollama {args}` fehlgeschlagen: {error}",
@@ -265,7 +270,7 @@ TRANSLATIONS = {
         "status_write_failed": "写入配置失败：{error}",
         "status_written_with_backup": "已写入配置到 {path}，并创建备份 {backup}",
         "status_written": "已写入配置到 {path}",
-        "ollama_not_found": "在 PATH 中找不到 `ollama`。",
+        "ollama_not_found": "找不到 `ollama`。请检查 PATH 或安装路径，例如 Apple Silicon Mac 常见路径 `/opt/homebrew/bin/ollama`。",
         "ollama_failed": "运行 `ollama {args}` 失败：{error}",
         "ollama_timeout": "`ollama {args}` 在 {timeout} 秒后超时。",
         "ollama_command_failed": "`ollama {args}` 失败：{error}",
@@ -473,11 +478,27 @@ def parse_ollama_show(output: str, model_name: str) -> ModelInfo:
     return info
 
 
+def resolve_ollama_executable() -> str | None:
+    ollama_path = shutil.which("ollama")
+    if ollama_path:
+        return ollama_path
+
+    for candidate in OLLAMA_FALLBACK_PATHS:
+        if Path(candidate).is_file() and os.access(candidate, os.X_OK):
+            return candidate
+
+    return None
+
+
 async def run_ollama_command(*args: str, timeout: float = 15, translate=None) -> tuple[str | None, str | None]:
     translate = translate or (lambda key, **kwargs: TRANSLATIONS["en"][key].format(**kwargs))
+    ollama_executable = resolve_ollama_executable()
+    if not ollama_executable:
+        return None, translate("ollama_not_found")
+
     try:
         process = await asyncio.create_subprocess_exec(
-            "ollama",
+            ollama_executable,
             *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

@@ -24,6 +24,8 @@ Expected downloadable files include:
 - `ContinueConfigGenerator-flet-windows-x64.zip`
 - `ContinueConfigGenerator-flet-linux-x64.tar.gz`
 
+The packaged macOS app uses `PATH` first and then falls back to common install locations such as `/opt/homebrew/bin/ollama` on Apple Silicon Macs.
+
 ## Screenshots
 
 ![Main interface screenshot 1](assets/screenshot-main-1.en.png)

@@ -24,6 +24,8 @@
 - `ContinueConfigGenerator-flet-windows-x64.zip`
 - `ContinueConfigGenerator-flet-linux-x64.tar.gz`
 
+macOS 打包版会先使用 `PATH`，找不到 `ollama` 时再自动尝试常见安装位置，例如 Apple Silicon 机器上的 `/opt/homebrew/bin/ollama`。
+
 ## 截图
 
 ![主界面截图 1](assets/screenshot-main-1.png)
