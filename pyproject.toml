@@ -1,0 +1,11 @@
+[project]
+name = "continue-config-generator"
+version = "0.1.0"
+description = "Desktop tool for generating Continue config from Ollama models."
+requires-python = ">=3.14"
+dependencies = [
+    "flet==0.82.2",
+]
+
+[tool.flet.flutter.pubspec.dependency_overrides]
+connectivity_plus = "6.1.5"
