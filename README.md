@@ -6,7 +6,7 @@
 ![Flet](https://img.shields.io/badge/Flet-0.82.2-00A86B)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-一个基于 Python + Flet 的桌面工具，用来读取 `ollama list` / `ollama show` 信息，并生成可直接写入 Continue 的 `config.yaml`。
+一个基于 Python + Flet 的桌面工具，用来通过 Ollama REST API 读取本机、局域网或其他服务器上的模型信息，并生成可直接写入 Continue 的 `config.yaml`。
 
 ## 下载
 
@@ -34,8 +34,9 @@ macOS 打包版会先使用 `PATH`，找不到 `ollama` 时再自动尝试常见
 
 ## 功能
 
-- 直接运行 `ollama list`，或手动粘贴输出内容
-- 批量调用 `ollama show` 检查模型元数据
+- 输入 Ollama 服务地址，例如 `http://localhost:11434` 或 `http://192.168.1.50:11434`
+- 通过 `/api/tags` 获取模型列表，也可手动粘贴模型列表
+- 批量调用 `/api/show` 检查模型元数据
 - 区分普通模型与 embedding-only 模型
 - 在表格中排序、查看模型能力与上下文长度
 - 选择默认模型并生成 Continue YAML
@@ -51,7 +52,7 @@ macOS 打包版会先使用 `PATH`，找不到 `ollama` 时再自动尝试常见
 
 ## 本地运行
 
-先确保本机已经安装并可执行 `ollama`。
+先确保目标 Ollama 服务可通过 HTTP 访问。若要访问局域网服务器，Ollama 服务端需要监听对应网络地址，并且防火墙允许访问端口，默认端口是 `11434`。
 
 ```bash
 pip install pipenv
@@ -139,8 +140,8 @@ Flet Build 版本：
 
 ## 使用前提
 
-- 已安装 Ollama
-- 本机能正常执行 `ollama list` 与 `ollama show <model>`
+- 已安装 Ollama，或者有可访问的远程 Ollama 服务
+- 目标服务能正常响应 `/api/tags` 与 `/api/show`
 - 已安装 Continue 扩展，并希望生成其本地配置文件
 
 ## 许可证

@@ -5,6 +5,9 @@ import json
 import locale
 import os
 import shutil
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -34,8 +37,10 @@ TRANSLATIONS = {
         "language_en": "English",
         "language_de": "German",
         "language_zh": "Chinese",
-        "config_name": "ollama local config",
-        "input_label": "Paste `ollama list` output",
+        "config_name": "ollama server config",
+        "server_url_label": "Ollama server URL",
+        "server_url_hint": "http://localhost:11434 or http://192.168.1.50:11434",
+        "input_label": "Model list",
         "input_hint": "NAME            ID              SIZE      MODIFIED\nllama3.2:latest abc123          2.0 GB    2 days ago",
         "output_label": "Generated Continue config",
         "collapse": "Click to collapse",
@@ -43,8 +48,8 @@ TRANSLATIONS = {
         "step1": "Step 1. Load Ollama List",
         "step2": "Step 2. Inspect Models",
         "step3": "Step 3. Generate Config",
-        "intro": "Run `ollama list` or paste its output, parse the model names, inspect them with `ollama show` when requested, review the sortable model table, then generate the Continue YAML only when requested.",
-        "run_ollama_list": "Run ollama list",
+        "intro": "Enter an Ollama server URL, load models through the Ollama REST API, inspect them through `/api/show`, review the sortable model table, then generate Continue YAML for that server.",
+        "run_ollama_list": "Fetch server models",
         "inspect_models": "Inspect models",
         "generate_config": "Generate config",
         "copy_config": "Copy config",
@@ -74,7 +79,7 @@ TRANSLATIONS = {
         "col_continue_capabilities": "Continue capabilities",
         "type_embedding_only": "embedding-only",
         "type_normal": "normal",
-        "source_local": "local",
+        "source_local": "server",
         "source_cloud": "cloud",
         "status_pending": "Pending",
         "status_inspecting": "Inspecting...",
@@ -85,15 +90,15 @@ TRANSLATIONS = {
         "status_embedding_default_error": "Embedding-only models cannot be selected as default.",
         "status_selected_default": "Selected default model: {model}",
         "status_cleared_default": "Cleared default model selection.",
-        "status_inspecting_models": "Inspecting {count} model(s) with `ollama show`...",
+        "status_inspecting_models": "Inspecting {count} model(s) through the Ollama API...",
         "status_loading_model": "Loading {index}/{count}: {model}",
         "status_loaded_metadata": "Loaded metadata for {count} model(s).{suffix} Choose one normal model in the table.",
         "status_filtered_embeddings": " Filtered out {count} embedding-only model(s).",
         "status_no_normal_models": "Loaded metadata, but no normal chat/edit/apply models were found.",
         "status_no_models_found": "No model names found in the provided text.",
         "status_parsed_models": "Parsed {count} model(s). Starting inspection...",
-        "status_running_ollama_list": "Running `ollama list`...",
-        "status_loaded_ollama_list": "Loaded `ollama list` output. Click `Inspect models` to parse and inspect.",
+        "status_running_ollama_list": "Fetching models from {url}...",
+        "status_loaded_ollama_list": "Loaded model list from {url}. Click `Inspect models` to inspect metadata.",
         "status_select_model_first": "Inspect models first and select one normal model in the table.",
         "status_selected_model_missing": "The selected model has no inspected metadata yet.",
         "status_no_ready_models": "No inspected models are available to generate config.",
@@ -108,6 +113,11 @@ TRANSLATIONS = {
         "ollama_failed": "Failed to run `ollama {args}`: {error}",
         "ollama_timeout": "`ollama {args}` timed out after {timeout} seconds.",
         "ollama_command_failed": "`ollama {args}` failed: {error}",
+        "ollama_api_failed": "Ollama API request to {url} failed: {error}",
+        "ollama_api_timeout": "Ollama API request to {url} timed out after {timeout} seconds.",
+        "ollama_api_bad_response": "Ollama API response from {url} could not be parsed.",
+        "ollama_api_no_models": "No models returned by {url}.",
+        "ollama_api_invalid_url": "Enter a valid Ollama server URL, for example http://192.168.1.50:11434.",
         "unknown_error": "Unknown error.",
         "error_prefix": "Error: {err}",
     },
@@ -117,8 +127,10 @@ TRANSLATIONS = {
         "language_en": "Englisch",
         "language_de": "Deutsch",
         "language_zh": "Chinesisch",
-        "config_name": "ollama local config",
-        "input_label": "`ollama list`-Ausgabe einfügen",
+        "config_name": "ollama server config",
+        "server_url_label": "Ollama-Server-URL",
+        "server_url_hint": "http://localhost:11434 oder http://192.168.1.50:11434",
+        "input_label": "Modellliste",
         "input_hint": "NAME            ID              SIZE      MODIFIED\nllama3.2:latest abc123          2.0 GB    2 days ago",
         "output_label": "Generierte Continue-Konfiguration",
         "collapse": "Zum Einklappen klicken",
@@ -126,8 +138,8 @@ TRANSLATIONS = {
         "step1": "Schritt 1. Ollama-Liste laden",
         "step2": "Schritt 2. Modelle prüfen",
         "step3": "Schritt 3. Konfiguration erzeugen",
-        "intro": "`ollama list` ausführen oder die Ausgabe einfügen, Modellnamen parsen, Modelle bei Bedarf mit `ollama show` prüfen, die sortierbare Tabelle ansehen und die Continue-YAML erst dann erzeugen.",
-        "run_ollama_list": "Ollama-Liste ausführen",
+        "intro": "Gib eine Ollama-Server-URL ein, lade Modelle über die Ollama-REST-API, prüfe sie über `/api/show`, kontrolliere die sortierbare Tabelle und erzeuge dann die Continue-YAML für diesen Server.",
+        "run_ollama_list": "Servermodelle laden",
         "inspect_models": "Modelle prüfen",
         "generate_config": "Konfiguration erzeugen",
         "copy_config": "Konfiguration kopieren",
@@ -157,7 +169,7 @@ TRANSLATIONS = {
         "col_continue_capabilities": "Continue-Fähigkeiten",
         "type_embedding_only": "nur Embedding",
         "type_normal": "normal",
-        "source_local": "lokal",
+        "source_local": "Server",
         "source_cloud": "cloud",
         "status_pending": "Ausstehend",
         "status_inspecting": "Wird geprüft...",
@@ -168,15 +180,15 @@ TRANSLATIONS = {
         "status_embedding_default_error": "Embedding-Modelle können nicht als Standard ausgewählt werden.",
         "status_selected_default": "Standardmodell gewählt: {model}",
         "status_cleared_default": "Standardmodellauswahl gelöscht.",
-        "status_inspecting_models": "{count} Modell(e) werden mit `ollama show` geprüft...",
+        "status_inspecting_models": "{count} Modell(e) werden über die Ollama-API geprüft...",
         "status_loading_model": "Lade {index}/{count}: {model}",
         "status_loaded_metadata": "Metadaten für {count} Modell(e) geladen.{suffix} Wähle ein normales Modell in der Tabelle.",
         "status_filtered_embeddings": " {count} reine Embedding-Modelle wurden herausgefiltert.",
         "status_no_normal_models": "Metadaten wurden geladen, aber es wurden keine normalen Chat/Edit/Apply-Modelle gefunden.",
         "status_no_models_found": "Im angegebenen Text wurden keine Modellnamen gefunden.",
         "status_parsed_models": "{count} Modell(e) geparst. Prüfung startet...",
-        "status_running_ollama_list": "`ollama list` wird ausgeführt...",
-        "status_loaded_ollama_list": "`ollama list`-Ausgabe geladen. Klicke auf `Modelle prüfen`, um zu parsen und zu prüfen.",
+        "status_running_ollama_list": "Modelle werden von {url} geladen...",
+        "status_loaded_ollama_list": "Modellliste von {url} geladen. Klicke auf `Modelle prüfen`, um Metadaten zu prüfen.",
         "status_select_model_first": "Prüfe zuerst die Modelle und wähle dann ein normales Modell in der Tabelle.",
         "status_selected_model_missing": "Für das ausgewählte Modell liegen noch keine geprüften Metadaten vor.",
         "status_no_ready_models": "Es sind keine geprüften Modelle zum Erzeugen der Konfiguration verfügbar.",
@@ -191,6 +203,11 @@ TRANSLATIONS = {
         "ollama_failed": "`ollama {args}` konnte nicht ausgeführt werden: {error}",
         "ollama_timeout": "`ollama {args}` hat nach {timeout} Sekunden das Zeitlimit erreicht.",
         "ollama_command_failed": "`ollama {args}` fehlgeschlagen: {error}",
+        "ollama_api_failed": "Ollama-API-Anfrage an {url} fehlgeschlagen: {error}",
+        "ollama_api_timeout": "Ollama-API-Anfrage an {url} hat nach {timeout} Sekunden das Zeitlimit erreicht.",
+        "ollama_api_bad_response": "Ollama-API-Antwort von {url} konnte nicht gelesen werden.",
+        "ollama_api_no_models": "Von {url} wurden keine Modelle geliefert.",
+        "ollama_api_invalid_url": "Gib eine gueltige Ollama-Server-URL ein, zum Beispiel http://192.168.1.50:11434.",
         "unknown_error": "Unbekannter Fehler.",
         "error_prefix": "Fehler: {err}",
     },
@@ -200,8 +217,10 @@ TRANSLATIONS = {
         "language_en": "英语",
         "language_de": "德语",
         "language_zh": "中文",
-        "config_name": "ollama local config",
-        "input_label": "粘贴 `ollama list` 输出",
+        "config_name": "ollama server config",
+        "server_url_label": "Ollama 服务器地址",
+        "server_url_hint": "http://localhost:11434 或 http://192.168.1.50:11434",
+        "input_label": "模型列表",
         "input_hint": "NAME            ID              SIZE      MODIFIED\nllama3.2:latest abc123          2.0 GB    2 days ago",
         "output_label": "生成的 Continue 配置",
         "collapse": "点击折叠",
@@ -209,8 +228,8 @@ TRANSLATIONS = {
         "step1": "步骤 1：加载 Ollama 列表",
         "step2": "步骤 2：检查模型",
         "step3": "步骤 3：生成配置",
-        "intro": "运行 `ollama list` 或粘贴其输出，解析模型名，按需用 `ollama show` 检查模型，查看可排序表格，然后再生成 Continue YAML。",
-        "run_ollama_list": "运行 ollama list",
+        "intro": "输入 Ollama 服务器地址，通过 Ollama REST API 加载模型，再通过 `/api/show` 检查模型元数据，查看可排序表格，然后为该服务器生成 Continue YAML。",
+        "run_ollama_list": "获取服务器模型",
         "inspect_models": "检查模型",
         "generate_config": "生成配置",
         "copy_config": "复制配置",
@@ -240,7 +259,7 @@ TRANSLATIONS = {
         "col_continue_capabilities": "Continue 能力",
         "type_embedding_only": "仅嵌入",
         "type_normal": "普通",
-        "source_local": "本地",
+        "source_local": "服务器",
         "source_cloud": "云端",
         "status_pending": "待处理",
         "status_inspecting": "检查中...",
@@ -251,15 +270,15 @@ TRANSLATIONS = {
         "status_embedding_default_error": "Embedding 模型不能被选为默认模型。",
         "status_selected_default": "已选择默认模型：{model}",
         "status_cleared_default": "已清除默认模型选择。",
-        "status_inspecting_models": "正在使用 `ollama show` 检查 {count} 个模型...",
+        "status_inspecting_models": "正在通过 Ollama API 检查 {count} 个模型...",
         "status_loading_model": "正在加载 {index}/{count}: {model}",
         "status_loaded_metadata": "已加载 {count} 个模型的元数据。{suffix} 请在表格中选择一个普通模型。",
         "status_filtered_embeddings": " 已过滤掉 {count} 个仅 embedding 模型。",
         "status_no_normal_models": "已加载元数据，但没有找到可用于 chat/edit/apply 的普通模型。",
         "status_no_models_found": "在提供的文本中没有找到模型名称。",
         "status_parsed_models": "已解析 {count} 个模型，开始检查...",
-        "status_running_ollama_list": "正在运行 `ollama list`...",
-        "status_loaded_ollama_list": "已加载 `ollama list` 输出。点击“检查模型”开始解析和检查。",
+        "status_running_ollama_list": "正在从 {url} 获取模型...",
+        "status_loaded_ollama_list": "已从 {url} 加载模型列表。点击“检查模型”开始检查元数据。",
         "status_select_model_first": "请先检查模型，然后在表格中选择一个普通模型。",
         "status_selected_model_missing": "所选模型还没有检查后的元数据。",
         "status_no_ready_models": "没有可用于生成配置的已检查模型。",
@@ -274,6 +293,11 @@ TRANSLATIONS = {
         "ollama_failed": "运行 `ollama {args}` 失败：{error}",
         "ollama_timeout": "`ollama {args}` 在 {timeout} 秒后超时。",
         "ollama_command_failed": "`ollama {args}` 失败：{error}",
+        "ollama_api_failed": "请求 Ollama API {url} 失败：{error}",
+        "ollama_api_timeout": "请求 Ollama API {url} 在 {timeout} 秒后超时。",
+        "ollama_api_bad_response": "无法解析来自 {url} 的 Ollama API 响应。",
+        "ollama_api_no_models": "{url} 没有返回模型。",
+        "ollama_api_invalid_url": "请输入有效的 Ollama 服务器地址，例如 http://192.168.1.50:11434。",
         "unknown_error": "未知错误。",
         "error_prefix": "错误：{err}",
     },
@@ -327,6 +351,7 @@ def save_language(language: str) -> None:
 class ModelInfo:
     name: str
     source_kind: str = "local"
+    api_base: str = "http://localhost:11434"
     architecture: str = ""
     parameters: str = ""
     context_length: str = ""
@@ -360,8 +385,26 @@ def yaml_string(value: str) -> str:
     return json.dumps(value)
 
 
-def display_model_name(model_name: str) -> str:
-    return f"ollama local {model_name}"
+def normalize_api_base(value: str) -> str:
+    url = value.strip() or "http://localhost:11434"
+    parsed = urllib.parse.urlparse(url)
+    if not parsed.scheme:
+        url = f"http://{url}"
+        parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("invalid Ollama server URL")
+    return url.rstrip("/")
+
+
+def api_host_label(api_base: str) -> str:
+    parsed = urllib.parse.urlparse(api_base)
+    return parsed.netloc or api_base
+
+
+def display_model_name(model: ModelInfo | str) -> str:
+    if isinstance(model, ModelInfo):
+        return f"ollama {api_host_label(model.api_base)} {model.name}"
+    return f"ollama local {model}"
 
 
 def parse_sort_number(value: str) -> int:
@@ -378,7 +421,7 @@ def parse_ollama_models(output: str) -> list[str]:
         if not line:
             continue
         upper_line = line.upper()
-        if upper_line.startswith("NAME ") or upper_line == "NAME":
+        if line.split()[0].upper() == "NAME":
             continue
 
         model_name = line.split()[0]
@@ -395,6 +438,8 @@ def detect_source_kind(model_name: str) -> str:
 
 def generate_continue_config(models: list[ModelInfo], selected_model_name: str) -> str:
     ordered_models = sorted(models, key=lambda model: (model.name != selected_model_name, model.name.lower()))
+    selected_model = next((model for model in models if model.name == selected_model_name), None)
+    selected_display_name = display_model_name(selected_model) if selected_model else display_model_name(selected_model_name)
 
     lines = [
         f"name: {yaml_string(TRANSLATIONS['en']['config_name'])}",
@@ -406,9 +451,10 @@ def generate_continue_config(models: list[ModelInfo], selected_model_name: str) 
     for model in ordered_models:
         lines.extend(
             [
-                f"  - name: {yaml_string(display_model_name(model.name))}",
+                f"  - name: {yaml_string(display_model_name(model))}",
                 f"    provider: {yaml_string('ollama')}",
                 f"    model: {yaml_string(model.name)}",
+                f"    apiBase: {yaml_string(model.api_base)}",
                 "    roles:",
             ]
         )
@@ -427,7 +473,7 @@ def generate_continue_config(models: list[ModelInfo], selected_model_name: str) 
 
     lines.extend(
         [
-            f"defaultModel: {yaml_string(display_model_name(selected_model_name))}",
+            f"defaultModel: {yaml_string(selected_display_name)}",
             "",
             "context:",
             "  - provider: code",
@@ -476,6 +522,93 @@ def parse_ollama_show(output: str, model_name: str) -> ModelInfo:
             info.capabilities.add(stripped.lower())
 
     return info
+
+
+def model_info_from_show_json(data: dict[str, Any], model_name: str, api_base: str) -> ModelInfo:
+    info = ModelInfo(name=model_name, source_kind=detect_source_kind(model_name), api_base=api_base)
+    details = data.get("details")
+    if isinstance(details, dict):
+        info.architecture = str(details.get("family") or "")
+        info.parameters = str(details.get("parameter_size") or "")
+        info.quantization = str(details.get("quantization_level") or "")
+
+    model_info = data.get("model_info")
+    if isinstance(model_info, dict):
+        architecture = model_info.get("general.architecture")
+        if architecture:
+            info.architecture = str(architecture)
+        if not info.parameters and model_info.get("general.parameter_count"):
+            info.parameters = str(model_info["general.parameter_count"])
+        if not info.quantization and model_info.get("general.file_type"):
+            info.quantization = str(model_info["general.file_type"])
+
+        for key, value in model_info.items():
+            lowered_key = str(key).lower()
+            if lowered_key.endswith(".context_length") or lowered_key == "context_length":
+                info.context_length = str(value)
+            elif lowered_key.endswith(".embedding_length") or lowered_key == "embedding_length":
+                info.embedding_length = str(value)
+
+    capabilities = data.get("capabilities")
+    if isinstance(capabilities, list):
+        info.capabilities = {str(capability).lower() for capability in capabilities}
+
+    if not info.capabilities:
+        info.capabilities.add("completion")
+    return info
+
+
+def request_ollama_json(method: str, url: str, payload: dict[str, Any] | None, timeout: float) -> dict[str, Any]:
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"} if payload is not None else {}
+    request = urllib.request.Request(url, data=body, headers=headers, method=method)
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+async def call_ollama_api(
+    method: str,
+    api_base: str,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    timeout: float = 15,
+    translate=None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    translate = translate or (lambda key, **kwargs: TRANSLATIONS["en"][key].format(**kwargs))
+    try:
+        normalized_base = normalize_api_base(api_base)
+    except ValueError:
+        return None, translate("ollama_api_invalid_url")
+
+    url = f"{normalized_base}{path}"
+    try:
+        return await asyncio.to_thread(request_ollama_json, method, url, payload, timeout), None
+    except TimeoutError:
+        return None, translate("ollama_api_timeout", url=url, timeout=int(timeout))
+    except urllib.error.URLError as exc:
+        return None, translate("ollama_api_failed", url=url, error=exc.reason)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return None, translate("ollama_api_bad_response", url=url) if isinstance(exc, (json.JSONDecodeError, UnicodeDecodeError)) else translate("ollama_api_failed", url=url, error=exc)
+
+
+def tags_to_ollama_list_text(data: dict[str, Any]) -> str:
+    models = data.get("models")
+    if not isinstance(models, list):
+        return ""
+
+    lines = ["NAME\tID\tSIZE\tMODIFIED"]
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        name = str(model.get("name") or model.get("model") or "").strip()
+        if not name:
+            continue
+        digest = str(model.get("digest") or "")[:12]
+        size = str(model.get("size") or "")
+        modified = str(model.get("modified_at") or "")
+        lines.append(f"{name}\t{digest}\t{size}\t{modified}")
+    return "\n".join(lines)
 
 
 def resolve_ollama_executable() -> str | None:
@@ -603,6 +736,12 @@ def main(page: ft.Page) -> None:
     sorting_frame_label = ft.Text(size=12, color=ft.Colors.ON_SURFACE_VARIANT)
     column_order_frame_label = ft.Text(size=12, color=ft.Colors.ON_SURFACE_VARIANT)
     language_label = ft.Text(weight=ft.FontWeight.W_500)
+    server_url_field = ft.TextField(
+        value="http://localhost:11434",
+        label=t("server_url_label"),
+        hint_text=t("server_url_hint"),
+        expand=True,
+    )
 
     def translate_status_code(status: str) -> str:
         mapping = {
@@ -757,6 +896,8 @@ def main(page: ft.Page) -> None:
         page.title = t("app_title")
         app_title_text.value = t("app_title")
         intro_text.value = t("intro")
+        server_url_field.label = t("server_url_label")
+        server_url_field.hint_text = t("server_url_hint")
         input_field.label = t("input_label")
         input_field.hint_text = t("input_hint")
         config_output.label = t("output_label")
@@ -860,6 +1001,7 @@ def main(page: ft.Page) -> None:
         busy = is_busy
         progress_bar.visible = is_busy
         progress_text.value = message
+        server_url_field.disabled = is_busy
         run_button.disabled = is_busy
         inspect_button.disabled = is_busy
         generate_button.disabled = is_busy or not bool(selected_model_name)
@@ -991,8 +1133,18 @@ def main(page: ft.Page) -> None:
         reset_column_order_button.disabled = column_order == default_column_order
         page.update()
 
+    def current_api_base() -> str | None:
+        try:
+            return normalize_api_base(server_url_field.value or "")
+        except ValueError:
+            set_status("ollama_api_invalid_url", is_error=True)
+            return None
+
     async def enrich_models(model_names: list[str]) -> None:
         nonlocal selected_model_name, step1_expanded, step2_expanded, step3_expanded
+        api_base = current_api_base()
+        if not api_base:
+            return
         selected_model_name = None
         progress_bar.value = 0
         step1_expanded = False
@@ -1010,7 +1162,7 @@ def main(page: ft.Page) -> None:
             progress_bar.value = (index - 1) / len(model_names)
             refresh_table()
 
-            output, error = await run_ollama_command("show", model_name, timeout=20, translate=t)
+            data, error = await call_ollama_api("POST", api_base, "/api/show", {"name": model_name}, timeout=20, translate=t)
             if error:
                 current_model.inspection_status = STATUS_ERROR
                 current_model.inspection_error = error
@@ -1021,7 +1173,7 @@ def main(page: ft.Page) -> None:
                 set_status("error_prefix", is_error=True, err=error)
                 return
 
-            parsed_model = parse_ollama_show(output or "", model_name)
+            parsed_model = model_info_from_show_json(data or {}, model_name, api_base)
             parsed_model.inspection_status = STATUS_READY
             model_details[model_name] = parsed_model
             progress_bar.value = index / len(model_names)
@@ -1044,6 +1196,9 @@ def main(page: ft.Page) -> None:
 
     def prepare_models_from_input() -> list[str]:
         nonlocal selected_model_name, step1_expanded, step2_expanded, step3_expanded
+        api_base = current_api_base()
+        if not api_base:
+            return []
         models = parse_ollama_models(input_field.value or "")
         if not models:
             parsed_model_names.clear()
@@ -1068,6 +1223,7 @@ def main(page: ft.Page) -> None:
             model_details[model_name] = ModelInfo(
                 name=model_name,
                 source_kind=detect_source_kind(model_name),
+                api_base=api_base,
                 inspection_status=STATUS_PENDING,
             )
         refresh_table()
@@ -1077,22 +1233,32 @@ def main(page: ft.Page) -> None:
         return models
 
     async def handle_run_ollama(_: Any) -> None:
+        api_base = current_api_base()
+        if not api_base:
+            return
         set_progress()
         progress_bar.visible = False
-        set_step1_progress("status_running_ollama_list", visible=True)
+        set_step1_progress("status_running_ollama_list", visible=True, url=api_base)
         set_busy_state(True, "")
-        output, error = await run_ollama_command("list", translate=t)
+        data, error = await call_ollama_api("GET", api_base, "/api/tags", timeout=15, translate=t)
         if error:
             set_busy_state(False)
             set_step1_progress()
             set_status("error_prefix", is_error=True, err=error)
             return
 
+        output = tags_to_ollama_list_text(data or {})
+        if len(parse_ollama_models(output)) == 0:
+            set_busy_state(False)
+            set_step1_progress()
+            set_status("ollama_api_no_models", is_error=True, url=api_base)
+            return
+
         input_field.value = output or ""
         set_busy_state(False)
         set_step1_progress()
         page.update()
-        set_status("status_loaded_ollama_list")
+        set_status("status_loaded_ollama_list", url=api_base)
 
     def handle_inspect(_: Any) -> None:
         models = prepare_models_from_input()
@@ -1209,6 +1375,11 @@ def main(page: ft.Page) -> None:
         refresh_sections()
 
     step1_body.controls = [
+        ft.Row(
+            controls=[
+                server_url_field,
+            ],
+        ),
         ft.Row(
             controls=[
                 run_button,
